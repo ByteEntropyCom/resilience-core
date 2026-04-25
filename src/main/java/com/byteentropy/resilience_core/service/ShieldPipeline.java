@@ -79,33 +79,36 @@ public class ShieldPipeline {
         }, executor);
     }
 
-    private PaymentResponse handleFallback(PaymentRequest req, Throwable t) {
-        Throwable actual = (t instanceof CompletionException ce) ? ce.getCause() : t;
+ private PaymentResponse handleFallback(PaymentRequest req, Throwable t) {
+        Throwable actual = (t instanceof java.util.concurrent.CompletionException ce) ? ce.getCause() : t;
         if (actual == null) actual = t;
 
         log.error("Fallback triggered for IdempotencyId: {}. Cause: {}", 
-                  req.idempotencyId(), actual.getClass().getSimpleName(), actual);
+                  req.idempotencyId(), actual.getClass().getSimpleName());
 
         String status = "FAILED";
         String msg = actual.getMessage() != null ? actual.getMessage() : "Unknown error";
 
         if (actual instanceof io.github.resilience4j.ratelimiter.RequestNotPermitted) {
             status = "REJECTED";
-            msg = "Rate limit exceeded (Max 10 requests/sec)";
+            msg = "Rate limit exceeded";
         } else if (actual instanceof io.github.resilience4j.circuitbreaker.CallNotPermittedException) {
             msg = "Service unavailable (circuit open)";
         } else if (isTimeout(actual)) {
-            msg = "Request timed out (Bank took too long)";
+            // FINTECH BEST PRACTICE: 
+            // We don't know if the bank charged the user or not.
+            status = "UNCERTAIN"; 
+            msg = "Request timed out; status unknown. Do not retry manually.";
+            log.warn("[RECONCILIATION NEEDED] Transaction {} is in UNCERTAIN state.", req.idempotencyId());
         }
 
         return new PaymentResponse(req.idempotencyId(), null, status, null, msg);
     }
 
     private boolean isTimeout(Throwable t) {
-        if (t == null) return false;
-        String msg = t.getMessage() != null ? t.getMessage().toLowerCase() : "";
-        return t instanceof java.util.concurrent.TimeoutException ||
-               (t.getCause() != null && t.getCause() instanceof java.util.concurrent.TimeoutException) ||
-               msg.contains("timeout") || msg.contains("timed out");
+        return t instanceof java.util.concurrent.TimeoutException || 
+               t instanceof java.net.SocketTimeoutException ||
+               (t.getCause() != null && (t.getCause() instanceof java.util.concurrent.TimeoutException || 
+                                         t.getCause() instanceof java.net.SocketTimeoutException));
     }
 }
