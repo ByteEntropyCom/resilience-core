@@ -65,7 +65,9 @@ class ShieldPipelineTest {
     void testRetryExhaustion() throws Exception {
         bankClient.setMode(ExternalBankClient.Mode.FAILURE);
         PaymentResponse response = pipeline.execute(request).get(10, TimeUnit.SECONDS);
-        verify(bankClient, times(3)).call(any());
+        
+        // UPDATED: Now 1 time because we don't retry generic RuntimeExceptions anymore
+        verify(bankClient, times(1)).call(any()); 
         assertThat(response.status()).isEqualTo("FAILED");
     }
 
@@ -73,7 +75,9 @@ class ShieldPipelineTest {
     void testTimeLimiterTrigger() throws Exception {
         bankClient.setMode(ExternalBankClient.Mode.SLOW);
         PaymentResponse response = pipeline.execute(request).get(10, TimeUnit.SECONDS);
-        assertThat(response.status()).isEqualTo("FAILED");
+        
+        // UPDATED: Asserting the new fintech-safe status
+        assertThat(response.status()).isEqualTo("UNCERTAIN");
         assertThat(response.message()).contains("timed out");
     }
 
@@ -81,48 +85,36 @@ class ShieldPipelineTest {
     void testTimeoutMode() throws Exception {
         bankClient.setMode(ExternalBankClient.Mode.TIMEOUT);
         PaymentResponse response = pipeline.execute(request).get(10, TimeUnit.SECONDS);
-        assertThat(response.status()).isEqualTo("FAILED");
+        
+        // UPDATED: Asserting the new fintech-safe status
+        assertThat(response.status()).isEqualTo("UNCERTAIN");
         assertThat(response.message()).contains("timed out");
     }
 
     @Test
     void testRateLimiterRejection() throws Exception {
         bankClient.setMode(ExternalBankClient.Mode.SUCCESS);
-
-        int burstSize = 25; // Well above your limit of 10
+        int burstSize = 25;
         List<CompletableFuture<PaymentResponse>> futures = new ArrayList<>();
 
-        // STAGE 1: Rapid-fire submission (Concurrent)
         for (int i = 0; i < burstSize; i++) {
             futures.add(pipeline.execute(request)); 
         }
 
-        // STAGE 2: Wait and collect results
         List<PaymentResponse> responses = futures.stream()
                 .map(f -> {
-                    try {
-                        return f.get(5, TimeUnit.SECONDS);
-                    } catch (Exception e) {
-                        return null;
-                    }
+                    try { return f.get(5, TimeUnit.SECONDS); } 
+                    catch (Exception e) { return null; }
                 })
                 .filter(Objects::nonNull)
                 .toList();
 
-        // STAGE 3: Validate rejections
         long rejectedCount = responses.stream()
                 .filter(r -> "REJECTED".equals(r.status()))
                 .count();
 
-        System.out.println("Total Sent: " + burstSize + " | Rejected: " + rejectedCount);
-
-        assertThat(rejectedCount)
-                .as("RateLimiter should have rejected requests exceeding the limit of 10")
-                .isGreaterThan(0);
+        assertThat(rejectedCount).isGreaterThan(0);
     }
-
-    ////
-
 
     @Test
     void testCircuitBreakerTrips() throws Exception {
@@ -130,13 +122,10 @@ class ShieldPipelineTest {
         CircuitBreaker cb = registry.circuitBreaker("bankCircuitBreaker");
 
         for (int i = 0; i < 15; i++) {
-            pipeline.execute(request)
-                    .handle((res, ex) -> null)
-                    .get(5, TimeUnit.SECONDS);
+            pipeline.execute(request).handle((res, ex) -> null).get(5, TimeUnit.SECONDS);
         }
 
         await().atMost(5, TimeUnit.SECONDS)
-                .pollInterval(100, TimeUnit.MILLISECONDS)
                 .untilAsserted(() -> assertThat(cb.getState()).isEqualTo(CircuitBreaker.State.OPEN));
 
         PaymentResponse response = pipeline.execute(request).get(5, TimeUnit.SECONDS);
@@ -149,18 +138,16 @@ class ShieldPipelineTest {
         CircuitBreaker cb = registry.circuitBreaker("bankCircuitBreaker");
 
         for (int i = 0; i < 15; i++) {
-            pipeline.execute(request)
-                    .handle((res, ex) -> null)
-                    .get(5, TimeUnit.SECONDS);
+            pipeline.execute(request).handle((res, ex) -> null).get(5, TimeUnit.SECONDS);
         }
 
         await().atMost(5, TimeUnit.SECONDS)
                 .untilAsserted(() -> assertThat(cb.getState()).isEqualTo(CircuitBreaker.State.OPEN));
 
-        Thread.sleep(11000);
+        // Wait for CB to transition to half-open/closed
+        Thread.sleep(6000); 
 
         bankClient.setMode(ExternalBankClient.Mode.SUCCESS);
-
         PaymentResponse response = pipeline.execute(request).get(5, TimeUnit.SECONDS);
         assertThat(response.status()).isEqualTo("AUTHORIZED");
     }
