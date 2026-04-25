@@ -6,7 +6,11 @@ on:
   pull_request:
     branches: [ main, develop ]
   schedule:
-    - cron: '0 2 * * *'  # Daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+# Set global env to fix Node.js 24 deprecation warnings
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
@@ -38,12 +42,14 @@ jobs:
         run: mvn package -DskipTests -B
 
       - name: Upload coverage reports
-        uses: codecov/codecov-action@v3
+        # Updated from v3 to v4
+        uses: codecov/codecov-action@v4
         if: matrix.java-version == '21'
         with:
           files: ./target/site/jacoco/jacoco.xml
           flags: unittests
           name: codecov-umbrella
+          token: ${{ secrets.CODECOV_TOKEN }} # v4 often requires a token
 
   quality:
     runs-on: ubuntu-latest
@@ -92,7 +98,8 @@ jobs:
         run: mvn org.owasp:dependency-check-maven:check || true
 
       - name: Upload dependency check results
-        uses: actions/upload-artifact@v3
+        # FIXED: Updated from v3 to v4 (This was your main error)
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: dependency-check-report
