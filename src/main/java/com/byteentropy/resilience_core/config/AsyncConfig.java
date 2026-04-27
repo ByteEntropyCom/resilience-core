@@ -6,7 +6,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
 @Configuration
-public class AppConfig {
+public class AsyncConfig {
 
     @Bean(name = "virtualThreadExecutor")
     public Executor virtualThreadExecutor() {
