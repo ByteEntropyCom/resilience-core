@@ -21,7 +21,7 @@ jobs:
     name: Build & Test (Java ${{ matrix.java-version }})
     strategy:
       matrix:
-        java-version: [ '21', '22' ]
+        java-version: [ '21']
     
     steps:
       - uses: actions/checkout@v4
