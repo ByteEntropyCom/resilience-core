@@ -5,10 +5,16 @@
 [![Java](https://img.shields.io/badge/Java-21-ED8B00?style=for-the-badge&logo=java&logoColor=white)](https://www.oracle.com/java/)
 [![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.2.4-6DB33F?style=for-the-badge&logo=spring-boot&logoColor=white)](https://spring.io/projects/spring-boot)
 [![Resilience4j](https://img.shields.io/badge/Resilience4j-2.2.0-5B6B95?style=for-the-badge)](https://resilience4j.readme.io/)
+[![H2 Database](https://img.shields.io/badge/Database-H2-003D6A?style=for-the-badge&logo=databricks&logoColor=white)](https://www.h2database.com/)
 [![Maven](https://img.shields.io/badge/Maven-3.8+-C71A36?style=for-the-badge&logo=apache-maven&logoColor=white)](https://maven.apache.org/)
 
+[![Virtual Threads](https://img.shields.io/badge/Architecture-Virtual_Threads-blue?style=flat-square&logo=java&logoColor=white)](https://openjdk.org/jeps/444)
+[![Idempotency](https://img.shields.io/badge/FinTech-Idempotent_API-success?style=flat-square)](https://github.com/ByteEntropyCom/resilience-core)
+[![Status](https://img.shields.io/badge/Production-Ready-brightgreen?style=flat-square)](https://github.com/ByteEntropyCom/resilience-core)
+
 [![CI/CD Pipeline](https://github.com/ByteEntropyCom/resilience-core/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/ByteEntropyCom/resilience-core/actions)
-[![License](https://img.shields.io/badge/License-MIT-green.svg?style=flat)](LICENSE)
+
+[![License](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/ByteEntropyCom/resilience-core?style=social)](https://github.com/ByteEntropyCom/resilience-core/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/ByteEntropyCom/resilience-core?style=social)](https://github.com/ByteEntropyCom/resilience-core/network/members)
 
