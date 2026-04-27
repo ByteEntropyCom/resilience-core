@@ -12,7 +12,7 @@ on:
       run_security_scan:
         description: 'Run OWASP Security Scan?'
         required: true
-        default: 'true'
+        default: true
         type: boolean
 
 env:
@@ -39,23 +39,14 @@ jobs:
           cache: maven
 
       - name: Build and Test
-        # This compiles, tests, and packages your JAR in one go
         run: mvn clean verify -B
 
       - name: Upload JAR Artifact
-        uses: actions/upload-artifact@v4
         if: matrix.java-version == '21'
+        uses: actions/upload-artifact@v4
         with:
           name: resilience-core-jar
           path: target/*.jar
-
-      - name: Upload coverage reports
-        uses: codecov/codecov-action@v4
-        if: matrix.java-version == '21'
-        with:
-          files: ./target/site/jacoco/jacoco.xml
-          flags: unittests
-          token: ${{ secrets.CODECOV_TOKEN }}
 
   quality:
     runs-on: ubuntu-latest
@@ -79,7 +70,8 @@ jobs:
     runs-on: ubuntu-latest
     name: Security Scan
     needs: build
-    if: always()
+    # LOGIC: Run if it's NOT manual OR if manual input is TRUE
+    if: always() && (github.event_name != 'workflow_dispatch' || inputs.run_security_scan == true)
     steps:
       - uses: actions/checkout@v4
       - name: Set up JDK 21
@@ -88,8 +80,13 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
           cache: maven
+      
       - name: Run OWASP Dependency Check
-        run: mvn org.owasp:dependency-check-maven:check || true
+        run: |
+          mvn org.owasp:dependency-check-maven:check \
+          -DnvdApiKey=${{ secrets.NVD_API_KEY }} \
+          -DfailOnError=false || true
+
       - name: Upload security report
         uses: actions/upload-artifact@v4
         with:
