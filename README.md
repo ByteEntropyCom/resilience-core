@@ -12,7 +12,7 @@
 [![Idempotency](https://img.shields.io/badge/FinTech-Idempotent_API-success?style=flat-square)](https://github.com/ByteEntropyCom/resilience-core)
 [![Status](https://img.shields.io/badge/Production-Ready-brightgreen?style=flat-square)](https://github.com/ByteEntropyCom/resilience-core)
 
-[![CI/CD Pipeline](https://github.com/ByteEntropyCom/resilience-core/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/ByteEntropyCom/resilience-core/actions)
+[![CI/CD Pipeline](https://github.com/ByteEntropyCom/resilience-core/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/ByteEntropyCom/resilience-core/actions)
 
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/ByteEntropyCom/resilience-core?style=social)](https://github.com/ByteEntropyCom/resilience-core/stargazers)
