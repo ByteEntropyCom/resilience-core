@@ -7,6 +7,13 @@ on:
     branches: [ main, develop ]
   schedule:
     - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      run_security_scan:
+        description: 'Run OWASP Security Scan?'
+        required: true
+        default: 'true'
+        type: boolean
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
