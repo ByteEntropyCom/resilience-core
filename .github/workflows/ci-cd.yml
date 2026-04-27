@@ -15,13 +15,10 @@ on:
         default: true
         type: boolean
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
-    name: Build & Test
+    name: Build & Test (Java ${{ matrix.java-version }})
     strategy:
       matrix:
         java-version: [ '21', '22' ]
@@ -42,17 +39,17 @@ jobs:
         run: mvn clean verify -B
 
       - name: Upload JAR Artifact
-        if: matrix.java-version == '21'
+        if: matrix.java-version == '21' && success()
         uses: actions/upload-artifact@v4
         with:
-          name: resilience-core-jar
+          name: resilience-core-v${{ github.run_number }}
           path: target/*.jar
 
   quality:
     runs-on: ubuntu-latest
     name: Code Quality
     needs: build
-    if: always()
+    if: success() # Only run if build passes
     steps:
       - uses: actions/checkout@v4
       - name: Set up JDK 21
@@ -62,7 +59,7 @@ jobs:
           distribution: 'temurin'
           cache: maven
       - name: Run SonarQube analysis
-        run: mvn sonar:sonar -Dsonar.projectKey=resilience-core -Dsonar.host.url=https://sonarcloud.io -Dsonar.login=${{ secrets.SONAR_TOKEN }} || true
+        run: mvn sonar:sonar -Dsonar.projectKey=resilience-core -Dsonar.host.url=https://sonarcloud.io -Dsonar.token=${{ secrets.SONAR_TOKEN }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -70,8 +67,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Security Scan
     needs: build
-    # LOGIC: Run if it's NOT manual OR if manual input is TRUE
-    if: always() && (github.event_name != 'workflow_dispatch' || inputs.run_security_scan == true)
+    if: success() && (github.event_name != 'workflow_dispatch' || inputs.run_security_scan == true)
     steps:
       - uses: actions/checkout@v4
       - name: Set up JDK 21
@@ -85,25 +81,10 @@ jobs:
         run: |
           mvn org.owasp:dependency-check-maven:check \
           -DnvdApiKey=${{ secrets.NVD_API_KEY }} \
-          -DfailOnError=false || true
+          -DfailOnError=false
 
       - name: Upload security report
         uses: actions/upload-artifact@v4
         with:
           name: security-report
           path: target/dependency-check-report.html
-
-  notification:
-    runs-on: ubuntu-latest
-    name: Notify Results
-    needs: [ build, quality, security ]
-    if: always()
-    steps:
-      - name: Build Status Notification
-        run: |
-          if [ "${{ needs.build.result }}" == "success" ]; then
-            echo "✅ Build Successful"
-          else
-            echo "❌ Build Failed"
-            exit 1
-          fi
