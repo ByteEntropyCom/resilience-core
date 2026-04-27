@@ -1,8 +1,8 @@
 package com.byteentropy.resilience_core.service;
 
 import com.byteentropy.resilience_core.client.ExternalBankClient;
-import com.byteentropy.resilience_core.model.PaymentRequest;
-import com.byteentropy.resilience_core.model.PaymentResponse;
+import com.byteentropy.resilience_core.model.*;
+import com.byteentropy.resilience_core.repository.PaymentRepository;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.ratelimiter.RateLimiter;
@@ -17,16 +17,15 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 
 @Service
 public class ShieldPipeline {
-
     private static final Logger log = LoggerFactory.getLogger(ShieldPipeline.class);
 
     private final ExternalBankClient bankClient;
+    private final PaymentRepository repository;
     private final Executor executor;
 
     private final CircuitBreaker circuitBreaker;
@@ -35,80 +34,68 @@ public class ShieldPipeline {
     private final TimeLimiter timeLimiter;
 
     public ShieldPipeline(ExternalBankClient bankClient,
+                          PaymentRepository repository,
                           @Qualifier("virtualThreadExecutor") Executor executor,
-                          CircuitBreakerRegistry circuitBreakerRegistry,
+                          CircuitBreakerRegistry cbRegistry,
                           RetryRegistry retryRegistry,
-                          RateLimiterRegistry rateLimiterRegistry,
-                          TimeLimiterRegistry timeLimiterRegistry) {
-
+                          RateLimiterRegistry rlRegistry,
+                          TimeLimiterRegistry tlRegistry) {
         this.bankClient = bankClient;
+        this.repository = repository;
         this.executor = executor;
-
-        this.circuitBreaker = circuitBreakerRegistry.circuitBreaker("bankCircuitBreaker");
+        this.circuitBreaker = cbRegistry.circuitBreaker("bankCircuitBreaker");
         this.retry = retryRegistry.retry("bankRetry");
-        this.rateLimiter = rateLimiterRegistry.rateLimiter("bankRateLimit");
-        this.timeLimiter = timeLimiterRegistry.timeLimiter("bankTimeout");
+        this.rateLimiter = rlRegistry.rateLimiter("bankRateLimit");
+        this.timeLimiter = tlRegistry.timeLimiter("bankTimeout");
     }
 
-    /**
-     * Executes payment with resilience patterns in this order:
-     * RateLimiter (outer) → Retry → CircuitBreaker → TimeLimiter (inner)
-     */
     public CompletableFuture<PaymentResponse> execute(PaymentRequest request) {
-        Supplier<PaymentResponse> rawSupplier = () -> bankClient.call(request);
+        // 1. IDEMPOTENCY CHECK (DB)
+        var existing = repository.findById(request.idempotencyId());
+        if (existing.isPresent()) {
+            log.info("[IDEMPOTENCY] Returning cached result for: {}", request.idempotencyId());
+            PaymentEntity e = existing.get();
+            return CompletableFuture.completedFuture(new PaymentResponse(e.getIdempotencyId(), e.getGatewayTxnId(), e.getStatus(), null, e.getMessage()));
+        }
 
-        // RateLimiter outermost → prevents too many requests from hitting Retry/CB
-        Supplier<PaymentResponse> decorated = RateLimiter.decorateSupplier(rateLimiter, rawSupplier);
+        // 2. CORE LOGIC WRAPPED IN RESILIENCE
+        Supplier<PaymentResponse> bankCall = () -> bankClient.call(request);
+        
+        // Decorate: RateLimit -> Retry -> CircuitBreaker
+        Supplier<PaymentResponse> resilientCall = RateLimiter.decorateSupplier(rateLimiter, 
+            Retry.decorateSupplier(retry, 
+                CircuitBreaker.decorateSupplier(circuitBreaker, bankCall)
+            )
+        );
 
-        // Then Retry
-        decorated = Retry.decorateSupplier(retry, decorated);
-
-        // Then CircuitBreaker
-        decorated = CircuitBreaker.decorateSupplier(circuitBreaker, decorated);
-
-        // Execute on virtual thread
-        CompletableFuture<PaymentResponse> callFuture = CompletableFuture.supplyAsync(decorated, executor);
-
-        // Apply TimeLimiter + fallback
+        // 3. EXECUTION WITH TIMEOUT
         return CompletableFuture.supplyAsync(() -> {
             try {
-                return timeLimiter.executeFutureSupplier(() -> callFuture);
-            } catch (Throwable ex) {
-                return handleFallback(request, ex);
+                PaymentResponse response = timeLimiter.executeFutureSupplier(() -> 
+                    CompletableFuture.supplyAsync(resilientCall, executor)
+                );
+                // 4. PERSIST SUCCESS
+                repository.save(new PaymentEntity(response.idempotencyId(), response.status(), response.gatewayTxnId(), response.message()));
+                return response;
+            } catch (Throwable t) {
+                return handleFallback(request, t);
             }
         }, executor);
     }
 
- private PaymentResponse handleFallback(PaymentRequest req, Throwable t) {
-        Throwable actual = (t instanceof java.util.concurrent.CompletionException ce) ? ce.getCause() : t;
-        if (actual == null) actual = t;
-
-        log.error("Fallback triggered for IdempotencyId: {}. Cause: {}", 
-                  req.idempotencyId(), actual.getClass().getSimpleName());
-
+    private PaymentResponse handleFallback(PaymentRequest req, Throwable t) {
+        log.error("Resilience failure for ID: {}. Cause: {}", req.idempotencyId(), t.getClass().getSimpleName());
+        
         String status = "FAILED";
-        String msg = actual.getMessage() != null ? actual.getMessage() : "Unknown error";
+        if (t instanceof io.github.resilience4j.ratelimiter.RequestNotPermitted) status = "REJECTED";
+        if (t.getCause() instanceof java.util.concurrent.TimeoutException) status = "UNCERTAIN";
 
-        if (actual instanceof io.github.resilience4j.ratelimiter.RequestNotPermitted) {
-            status = "REJECTED";
-            msg = "Rate limit exceeded";
-        } else if (actual instanceof io.github.resilience4j.circuitbreaker.CallNotPermittedException) {
-            msg = "Service unavailable (circuit open)";
-        } else if (isTimeout(actual)) {
-            // FINTECH BEST PRACTICE: 
-            // We don't know if the bank charged the user or not.
-            status = "UNCERTAIN"; 
-            msg = "Request timed out; status unknown. Do not retry manually.";
-            log.warn("[RECONCILIATION NEEDED] Transaction {} is in UNCERTAIN state.", req.idempotencyId());
+        PaymentResponse fb = new PaymentResponse(req.idempotencyId(), null, status, null, t.getMessage());
+        
+        // Only save to DB if it's UNCERTAIN so we don't allow manual retries
+        if (status.equals("UNCERTAIN")) {
+            repository.save(new PaymentEntity(fb.idempotencyId(), fb.status(), null, fb.message()));
         }
-
-        return new PaymentResponse(req.idempotencyId(), null, status, null, msg);
-    }
-
-    private boolean isTimeout(Throwable t) {
-        return t instanceof java.util.concurrent.TimeoutException || 
-               t instanceof java.net.SocketTimeoutException ||
-               (t.getCause() != null && (t.getCause() instanceof java.util.concurrent.TimeoutException || 
-                                         t.getCause() instanceof java.net.SocketTimeoutException));
+        return fb;
     }
 }
