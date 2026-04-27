@@ -59,7 +59,7 @@ jobs:
           distribution: 'temurin'
           cache: maven
       - name: Run SonarQube analysis
-        continue-on-error: true
+        continue-on-error: true # <--- This bypasses the failure
         run: mvn sonar:sonar -Dsonar.projectKey=resilience-core -Dsonar.host.url=https://sonarcloud.io -Dsonar.token=${{ secrets.SONAR_TOKEN }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -79,7 +79,7 @@ jobs:
           cache: maven
       
       - name: Run OWASP Dependency Check
-        continue-on-error: true
+        continue-on-error: true # <--- This bypasses the failure
         run: |
           mvn org.owasp:dependency-check-maven:check \
           -DnvdApiKey=${{ secrets.NVD_API_KEY }} \
