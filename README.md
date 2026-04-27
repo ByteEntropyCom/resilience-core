@@ -36,8 +36,7 @@
 🛡️ **Bulkhead Isolation** - Limit resource consumption with thread and connection pools  
 📊 **Rate Limiting** - Control request flow and prevent resource exhaustion  
 🔍 **Observability** - Built-in metrics and monitoring integration  
-🚀 **Spring Boot Integration** - Seamless auto-configuration and bean management  
-📝 **AOP Support** - Declarative fault tolerance with annotations  
+🚀 **Spring Boot Integration** - Seamless auto-configuration and bean management
 
 ## Technology Stack
 
