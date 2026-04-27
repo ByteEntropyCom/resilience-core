@@ -61,12 +61,6 @@
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Support & Community
-
-- 📧 **Issues**: [GitHub Issues](https://github.com/ByteEntropyCom/resilience-core/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/ByteEntropyCom/resilience-core/discussions)
-- 🐦 **Follow**: [@ByteEntropyCom](https://twitter.com/ByteEntropyCom)
-
 ## Authors
 
 **ByteEntropyCom** - *Initial work* - [GitHub Profile](https://github.com/ByteEntropyCom)
