@@ -43,8 +43,6 @@ public class ShieldPipeline {
         this.bankClient = bankClient;
         this.repository = repository;
         this.executor = executor;
-        
-        // Initializing the "Shields" from Registry
         this.circuitBreaker = cbRegistry.circuitBreaker("bankCircuitBreaker");
         this.retry = retryRegistry.retry("bankRetry");
         this.rateLimiter = rlRegistry.rateLimiter("bankRateLimit");
@@ -52,39 +50,32 @@ public class ShieldPipeline {
     }
 
     public CompletableFuture<PaymentResponse> execute(PaymentRequest request) {
-        // 1. Idempotency Check
+        // Idempotency: Check DB first
         return repository.findById(request.idempotencyId())
             .map(e -> {
                 log.info("[IDEMPOTENCY] Cache Hit: {}", request.idempotencyId());
                 return CompletableFuture.completedFuture(new PaymentResponse(
                     e.getIdempotencyId(), e.getGatewayTxnId(), e.getStatus(), null, e.getMessage()));
             })
-            .orElseGet(() -> processNewPayment(request));
+            .orElseGet(() -> processRequest(request));
     }
 
-    private CompletableFuture<PaymentResponse> processNewPayment(PaymentRequest request) {
-        // 2. Define the core logic
+    private CompletableFuture<PaymentResponse> processRequest(PaymentRequest request) {
         Supplier<PaymentResponse> bankCall = () -> bankClient.call(request);
-        
-        // 3. Decorate with Resilience Patterns
-        // Order: RateLimit (Outer) -> Retry -> CircuitBreaker (Inner)
+
+        // Chain: RateLimit -> Retry -> CircuitBreaker
         Supplier<PaymentResponse> resilientCall = RateLimiter.decorateSupplier(rateLimiter, 
             Retry.decorateSupplier(retry, 
                 CircuitBreaker.decorateSupplier(circuitBreaker, bankCall)
             )
         );
 
-        // 4. Run Async with TimeLimiter
         return CompletableFuture.supplyAsync(() -> {
             try {
                 PaymentResponse response = timeLimiter.executeFutureSupplier(() -> 
                     CompletableFuture.supplyAsync(resilientCall, executor)
                 );
-                
-                // Save success to DB
-                repository.save(new PaymentEntity(
-                    response.idempotencyId(), response.status(), response.gatewayTxnId(), response.message()));
-                
+                repository.save(new PaymentEntity(response.idempotencyId(), response.status(), response.gatewayTxnId(), response.message()));
                 return response;
             } catch (Throwable t) {
                 return handleFallback(request, t);
@@ -94,24 +85,17 @@ public class ShieldPipeline {
 
     private PaymentResponse handleFallback(PaymentRequest req, Throwable t) {
         String status = "FAILED";
-        String msg = t.getMessage();
-        
-        // Check specific resilience exceptions
+        String msg = (t.getCause() != null) ? t.getCause().getMessage() : t.getMessage();
+
         if (t instanceof io.github.resilience4j.ratelimiter.RequestNotPermitted) {
             status = "REJECTED";
             msg = "Rate limit exceeded";
         } else if (t.getCause() instanceof java.util.concurrent.TimeoutException) {
             status = "UNCERTAIN";
-            msg = "Bank timeout - status unknown";
+            msg = "Bank Timeout - Verification required";
+            repository.save(new PaymentEntity(req.idempotencyId(), status, null, msg));
         }
 
-        PaymentResponse fb = new PaymentResponse(req.idempotencyId(), null, status, null, msg);
-        
-        // Save UNCERTAIN states to prevent unsafe manual retries
-        if ("UNCERTAIN".equals(status)) {
-            repository.save(new PaymentEntity(fb.idempotencyId(), fb.status(), null, fb.message()));
-        }
-        
-        return fb;
+        return new PaymentResponse(req.idempotencyId(), null, status, null, msg);
     }
 }
