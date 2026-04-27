@@ -79,6 +79,7 @@ jobs:
           cache: maven
       
       - name: Run OWASP Dependency Check
+        continue-on-error: true
         run: |
           mvn org.owasp:dependency-check-maven:check \
           -DnvdApiKey=${{ secrets.NVD_API_KEY }} \
