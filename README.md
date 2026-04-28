@@ -84,9 +84,9 @@ Full integration with Spring Boot Actuator and Prometheus for monitoring circuit
      The application uses smart defaults, but you can override them in application.properties or via environment variables:
 
       ```Properties
-      # Example: Adjusting the Circuit Breaker Threshold
-      CB_FAILURE_THRESHOLD=50
-      CB_WINDOW_SIZE=10
+          # Example: Adjusting the Circuit Breaker Threshold
+          CB_FAILURE_THRESHOLD=50
+          CB_WINDOW_SIZE=10
       ``` 
     3. Build, Test and Run
 
