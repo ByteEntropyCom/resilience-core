@@ -95,6 +95,15 @@ Full integration with Spring Boot Actuator and Prometheus for monitoring circuit
         mvn test
         mvn spring-boot:run
       ```
+    4. Run with Docker:
+
+        ```bash
+        # Build the image
+        docker build -t resilience-core .
+        
+        # Run the container
+        docker run -p 8080:8080 resilience-core
+       ```
 
  ---
  
