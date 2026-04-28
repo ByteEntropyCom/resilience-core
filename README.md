@@ -26,49 +26,113 @@
 
 ## Overview
 
-**resilience-core** is an enterprise-grade Java library built on top of Spring Boot 3.2.4 and Resilience4j 2.2.0. It provides comprehensive fault tolerance patterns including circuit breakers, retries, timeouts, bulkheads, and rate limiting to help you build resilient, production-ready applications.
-
-## Key Features
-
-✨ **Circuit Breaker Pattern** - Prevent cascading failures with intelligent circuit breaking  
-🔄 **Retry Mechanism** - Automatic retry logic with exponential backoff  
-⏱️ **Timeout Management** - Gracefully handle long-running operations  
-🛡️ **Bulkhead Isolation** - Limit resource consumption with thread and connection pools  
-📊 **Rate Limiting** - Control request flow and prevent resource exhaustion  
-🔍 **Observability** - Built-in metrics and monitoring integration  
-🚀 **Spring Boot Integration** - Seamless auto-configuration and bean management
-
-## Technology Stack
-
-| Technology | Version | Purpose |
-|-----------|---------|---------|
-| Java | 21 | Core language |
-| Spring Boot | 3.2.4 | Application framework |
-| Resilience4j | 2.2.0 | Fault tolerance library |
-| Maven | 3.8+ | Build automation |
-| JUnit 5 | Latest | Testing framework |
-| Awaitility | 4.2.0 | Async testing |
-
-## Quick Start
-
-### Prerequisites
-
-- Java 21 or higher
-- Maven 3.8.0 or higher
-- Spring Boot 3.2.4+
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Authors
-
-**ByteEntropyCom** - *Initial work* - [GitHub Profile](https://github.com/ByteEntropyCom)
+A high-performance Spring Boot library designed for extreme fault tolerance. Resilience Core leverages Java 21's Virtual Threads (Project Loom) to handle high-concurrency external integrations without the overhead of traditional thread management.
 
 ---
 
-<div align="center">
+## 🚀 Key Features
+### Project Loom Integration - 
+Utilizes VirtualThreadPerTaskExecutor for lightweight, non-blocking asynchronous processing.
 
-Made with ❤️ by [ByteEntropyCom](https://github.com/ByteEntropyCom)
+### Layered Resilience - 
+Pre-configured pipeline combining:
 
-</div>
+   * **Circuit Breaker: Prevents system saturation during downstream outages.
+
+   * **Rate Limiter: Protects upstream and downstream resources.
+
+   * **Retry Pattern: Handles transient network glitches with configurable backoff.
+
+   * **Time Limiter: Ensures requests don't hang indefinitely.
+
+### Idempotency Protection - 
+Built-in persistence layer via JPA to prevent duplicate processing of critical transactions.
+
+### Real-time Observability - 
+Full integration with Spring Boot Actuator and Prometheus for monitoring circuit states and failure rates.
+
+---
+## 🛠️ Technology Stack
+
+| Technology | Version | Purpose |
+| :--- | :--- | :--- |
+| **Java** | 21 | Virtual Threads (Project Loom) & Modern Syntax |
+| **Spring Boot** | 3.2.4 | Core Framework & Auto-configuration |
+| **Resilience4j** | 2.2.0 | Fault Tolerance Patterns (Circuit Breaker, Retry, etc.) |
+| **JPA / H2** | Latest | Transactional Idempotency & Persistence History |
+| **Maven** | 3.9+ | Build Automation & Dependency Management |
+
+---
+
+## 📋 Prerequisites
+
+* **JDK 21+** (Strictly required for Virtual Threads support)
+* **Maven 3.9.x**
+* **GitHub Secrets:** (Optional) Set `SONAR_TOKEN` and `NVD_API_KEY` for full CI/CD features.
+
+---
+
+## ⚙️ Installation & Setup
+  1. Clone the Repository
+
+  ```bash
+    git clone https://github.com/ByteEntropyCom/resilience-core.git
+    cd resilience-core
+  ```
+  2. Configure Environment (Optional)
+     The application uses smart defaults, but you can override them in application.properties or via environment variables:
+
+      ```Properties
+      # Example: Adjusting the Circuit Breaker Threshold
+      CB_FAILURE_THRESHOLD=50
+      CB_WINDOW_SIZE=10
+      ``` 
+    3. Build, Test and Run
+
+      ```bash
+        mvn clean install
+        mvn test
+        mvn spring-boot:run
+      ```
+
+ ---
+ 
+  ## 🕹️ Usage Example
+  The core logic resides in the ShieldPipeline, which orchestrates the resilience decorators.
+
+      ```Java
+      @Autowired
+      private ShieldPipeline pipeline;
+      
+      public void processPayment(PaymentRequest request) {
+          pipeline.execute(request)
+              .thenAccept(response -> log.info("Result: " + response.status()))
+              .exceptionally(ex -> {
+                  log.error("Pipeline failed: " + ex.getMessage());
+                  return null;
+              });
+      }
+      ```
+
+    ---
+    
+     ## 📊 Monitoring & Observability
+      Once running, you can monitor the health of your resilience patterns:
+      
+      * **Health Status: GET /actuator/health (Shows Circuit Breaker state)
+      * **Metrics: GET /actuator/prometheus (Detailed failure/success counters)
+      * **H2 Console: localhost:8080/h2-console (JDBC URL: jdbc:h2:mem:testdb)
+
+      ## 🛡️ Security & Quality
+      This project includes a rigorous CI/CD pipeline:
+      * **OWASP Dependency Check: Scans for vulnerable libraries.
+      * **SonarQube: Monitors code quality and technical debt.
+      * **Automated Tests: Ensures 100% context loading and logic verification.
+
+    ---
+    
+      ## 📄 License
+      Distributed under the MIT License. See LICENSE for more information.
+      
+      ----
+      Developed with ❤️ by ByteEntropy
