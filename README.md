@@ -76,7 +76,7 @@ Full integration with Spring Boot Actuator and Prometheus for monitoring circuit
   1. Clone the Repository
 
   ```bash
-    git clone https://github.com/ByteEntropyCom/resilience-core.git
+    git clone https://github.com/ByteEntropyDotCom/resilience-core.git
     cd resilience-core
    ```
   
